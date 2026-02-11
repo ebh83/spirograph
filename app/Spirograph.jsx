@@ -41,6 +41,8 @@ export default function Spirograph() {
   const lastMouseAngleRef = useRef(0);
   const cumulativeAngleRef = useRef(0);
   const isDraggingRef = useRef(false);
+  const penColorRef = useRef('#E63946'); // Track current color for animation
+  const lineWidthRef = useRef(1.5); // Track current line width for animation
   
   const [outerRadius, setOuterRadius] = useState(120);
   const [innerRadius, setInnerRadius] = useState(45);
@@ -55,6 +57,15 @@ export default function Spirograph() {
   const [drawingMode, setDrawingMode] = useState(DRAWING_MODES.MANUAL);
   const [isManualDrawing, setIsManualDrawing] = useState(false);
   const [currentAngle, setCurrentAngle] = useState(0);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    penColorRef.current = penColor;
+  }, [penColor]);
+
+  useEffect(() => {
+    lineWidthRef.current = lineWidth;
+  }, [lineWidth]);
 
   const getSpirographPoint = useCallback((t, R, r, d, centerX, centerY) => {
     const diff = R - r;
@@ -146,17 +157,18 @@ export default function Spirograph() {
       ctx.stroke();
     }
     
-    if (showGears && isDrawing && currentSegmentRef.current && currentSegmentRef.current.points.length > 0) {
-      const totalRotations = getTotalRotations(outerRadius, innerRadius);
-      const maxT = totalRotations * Math.PI * 2;
-      const currentT = (progress / 100) * maxT;
-      drawGears(ctx, currentT, outerRadius, innerRadius, penDistance, centerX, centerY);
+    // Show gears in both modes
+    if (showGears) {
+      if (drawingMode === DRAWING_MODES.AUTO) {
+        const totalRotations = getTotalRotations(outerRadius, innerRadius);
+        const maxT = totalRotations * Math.PI * 2;
+        const currentT = (progress / 100) * maxT;
+        drawGears(ctx, currentT, outerRadius, innerRadius, penDistance, centerX, centerY);
+      } else {
+        drawGears(ctx, currentAngle, outerRadius, innerRadius, penDistance, centerX, centerY);
+      }
     }
-    
-    if (showGears && drawingMode === DRAWING_MODES.MANUAL) {
-      drawGears(ctx, currentAngle, outerRadius, innerRadius, penDistance, centerX, centerY);
-    }
-  }, [backgroundColor, showGears, isDrawing, progress, outerRadius, innerRadius, penDistance, getTotalRotations, drawGears, drawingMode, currentAngle]);
+  }, [backgroundColor, showGears, progress, outerRadius, innerRadius, penDistance, getTotalRotations, drawGears, drawingMode, currentAngle]);
 
   const animate = useCallback(() => {
     const canvas = canvasRef.current;
@@ -183,6 +195,21 @@ export default function Spirograph() {
         setProgress(100);
         draw();
         return;
+      }
+      
+      // Check if color or lineWidth changed - if so, start a new segment
+      if (currentSegmentRef.current && 
+          (currentSegmentRef.current.color !== penColorRef.current || 
+           currentSegmentRef.current.lineWidth !== lineWidthRef.current)) {
+        // Save current segment
+        segmentsRef.current.push(currentSegmentRef.current);
+        // Start new segment with new color, including last point for continuity
+        const lastPoint = currentSegmentRef.current.points[currentSegmentRef.current.points.length - 1];
+        currentSegmentRef.current = {
+          color: penColorRef.current,
+          lineWidth: lineWidthRef.current,
+          points: lastPoint ? [lastPoint] : []
+        };
       }
       
       const t = currentStep * step;
